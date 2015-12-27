@@ -1,0 +1,129 @@
+## Create one R script called run_analysis.R that does the following:
+## 1. Merges the training and the test sets to create one data set.
+## 2. Extracts only the measurements on the mean and standard deviation for each measurement.
+## 3. Uses descriptive activity names to name the activities in the data set
+## 4. Appropriately labels the data set with descriptive activity names.
+## 5. Creates a second, independent tidy data set with the average of each variable for each activity and each subject.
+
+# Source:
+# http://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones
+
+## Loading required packages for analysis used in the script
+require(data.table)
+require(dplyr)
+
+## First task is to read training and test data and merge dataset into one.
+
+## Reading train data and storing using read.table format into relevant variables.
+
+activityTrain <-
+  read.table("UCI HAR Dataset/train/y_train.txt", header = FALSE)
+featuresTrain <-
+  read.table("UCI HAR Dataset/train/X_train.txt", header = FALSE)
+subjectTrain <-
+  read.table("UCI HAR Dataset/train/subject_train.txt", header = FALSE)
+
+## Reading train data and storing using read.table format into relevant variables.
+
+activityTest <-
+  read.table("UCI HAR Dataset/test/y_test.txt", header = FALSE)
+featuresTest <-
+  read.table("UCI HAR Dataset/test/X_test.txt", header = FALSE)
+subjectTest <-
+  read.table("UCI HAR Dataset/test/subject_test.txt", header = FALSE)
+
+## Reading additional supporting attributes features and activities labels from features and activity labels text
+
+feature_labels <-
+  read.table("UCI HAR Dataset/features.txt", col.names = c('index', 'labels'))
+activity_Labels <-
+  read.table("UCI HAR Dataset/activity_labels.txt", header = FALSE)[,2]
+
+## 1. Merges the training and the test sets to create one data set.
+
+activity_data <- rbind(activityTrain, activityTest)
+features_data <- rbind(featuresTrain, featuresTest)
+subject_data <-  rbind(subjectTrain, subjectTest)
+
+## View Data for all three datasets shows 10299 observations.
+
+## assigning columan names to the feature_data using feature_labels$labels the column name of features
+
+names(feature_labels)
+labels <- feature_labels$labels
+colnames(features_data) <- labels
+
+## Now, merging the data into complete set using Cbind to prepare the list for further analysis
+
+colnames(activity_data) <- "Activity"
+colnames(subject_data) <- "Subject"
+study_data <- cbind(features_data,activity_data,subject_data)
+
+dim(study_data)
+# [1] 10299   563
+
+### 2. Extracts only the measurements on the mean and standard deviation for each measurement.
+
+# subset the features that contains mean and standard deviation values only
+
+extract_features <-
+  as.character(feature_labels$labels[grepl('mean()|std()', feature_labels$labels)])
+
+# meanFreq measurements should not be added.
+extract_features <-
+  as.character(extract_features[!grepl('meanFreq()', extract_features)])
+extract_features_mean_std_only <-
+  features_data[,c(extract_features)]
+
+# 3. Use descriptive activity names to name the activities in the data set
+
+# descriptive names according to activity_labels.txt
+activity_data$Activity[activity_data$Activity == '1'] <- 'WALKING'
+activity_data$Activity[activity_data$Activity == '2'] <-
+  'WALKING_UPSTAIRS'
+activity_data$Activity[activity_data$Activity == '3'] <-
+  'WALKING_DOWNSTAIRS'
+activity_data$Activity[activity_data$Activity == '4'] <- 'SITTING'
+activity_data$Activity[activity_data$Activity == '5'] <- 'STANDING'
+activity_data$Activity[activity_data$Activity == '6'] <- 'LAYING'
+
+
+# 4. Appropriately labels the data set with descriptive names.
+
+# make variable names more descriptive by using full words and removing parentheses
+names(extract_features_mean_std_only) <-
+  gsub('Acc','Acceleration', names(extract_features_mean_std_only))
+names(extract_features_mean_std_only) <-
+  gsub('-mean','Mean', names(extract_features_mean_std_only))
+names(extract_features_mean_std_only) <-
+  gsub('-std','StandardDeviation', names(extract_features_mean_std_only))
+names(extract_features_mean_std_only) <-
+  gsub('Mag','Magnitude', names(extract_features_mean_std_only))
+names(extract_features_mean_std_only) <-
+  gsub('Freq','Frequency', names(extract_features_mean_std_only))
+names(extract_features_mean_std_only) <-
+  gsub("^t", "Time", names(extract_features_mean_std_only))
+names(extract_features_mean_std_only) <-
+  gsub("^f", "Frequency", names(extract_features_mean_std_only))
+
+# --------------------------------------------------------------------------------------
+# 5. Create a second, independent tidy data set with the average of each variable for each activity and each subject
+
+# combine all data sets using Cbind
+
+result_data <-
+  cbind(subject_data,activity_data,extract_features_mean_std_only)
+
+# View(result_data)
+# dim(result_data)
+# [1] 10299    68
+
+# get the average of each variable for each activity and subject (using dplyr)
+
+grp_data <- group_by(result_data,Subject,Activity)
+tidy_data <-
+  summarize_each(grp_data,funs(mean(., na.rm = TRUE)),-Subject,-Activity)
+
+# create a final dataset to store tidy data  as tidy_data.txt
+
+write.table(tidy_data, file = "tidy_data.txt", row.names = FALSE)
